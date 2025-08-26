@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>포켓몬 검색기</title>
+    <!-- Favicon: Git에 올릴 img 경로 사용 -->
+    <link rel="icon" type="image/png" href="img/favicon.png" />
+
+    <style>
+      @font-face {
+        font-family: "PF-Stardust-3-0-S";
+        src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/2506-1@1.0/PFStardustSBold.woff2")
+          format("woff2");
+        font-weight: 700;
+        font-display: swap;
+      }
+      body,
+      input {
+        font-family: "PF-Stardust-3-0-S";
+        font-size: 30px;
+      }
+      section {
+        margin: 1rem 2rem;
+      }
+      #search-form,
+      #container,
+      #poke-info > section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        align-items: center;
+      }
+      #search-form * {
+        width: 240px;
+        padding: 0.3rem;
+        border: 1px solid grey;
+        border-radius: 0.3rem;
+      }
+      .hide {
+        display: none;
+      }
+
+      /* 썸네일 숨기기 */
+      #thumbnail {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 숨긴 썸네일 (본문에는 안 보임) -->
+    <img id="thumbnail" src="img/thumbnail.png" alt="썸네일" />
+
+    <section id="controller">
+      <form id="search-form">
+        <input type="text" id="poke-name" placeholder="이름 또는 ID 입력" />
+        <button>검색</button>
+      </form>
+    </section>
+    <section id="container">
+      <div id="message">검색해보세요!</div>
+      <section class="hide" id="poke-info">
+        <section>
+          <div><strong>이름</strong> : <span id="poke-koname"></span></div>
+          <div><strong>영어</strong> : <span id="poke-enname"></span></div>
+          <img src="" alt="포켓몬 사진" />
+        </section>
+      </section>
+    </section>
+
+    <script>
+      async function getIdByNameOrId(input) {
+        const cache = JSON.parse(localStorage.getItem("idToName") || "{}");
+
+        if (!isNaN(input)) {
+          const id = input;
+          if (!cache[id]) {
+            const detail = await fetch(
+              `https://pokeapi.co/api/v2/pokemon-species/${id}`
+            ).then((r) => r.json());
+            const ko = detail.names.find((n) => n.language.name === "ko");
+            if (ko) cache[id] = ko.name;
+            localStorage.setItem("idToName", JSON.stringify(cache));
+          }
+          return id;
+        }
+
+        const existingId = Object.keys(cache).find((id) => cache[id] === input);
+        if (existingId) return existingId;
+
+        const res = await fetch(
+          "https://pokeapi.co/api/v2/pokemon-species?limit=1025"
+        );
+        const data = await res.json();
+        const list = data.results;
+
+        for (let i = 0; i < list.length; i++) {
+          const detail = await fetch(list[i].url).then((r) => r.json());
+          const ko = detail.names.find((n) => n.language.name === "ko");
+          if (ko) {
+            cache[detail.id] = ko.name;
+            if (ko.name === input) {
+              localStorage.setItem("idToName", JSON.stringify(cache));
+              return detail.id;
+            }
+          }
+        }
+
+        localStorage.setItem("idToName", JSON.stringify(cache));
+        return null;
+      }
+
+      async function searchName(nameOrId) {
+        const id = await getIdByNameOrId(nameOrId);
+        if (!id) return alert("존재하지 않는 포켓몬!");
+
+        const [poke, species] = await Promise.all([
+          fetch(`https://pokeapi.co/api/v2/pokemon/${id}`).then((r) =>
+            r.json()
+          ),
+          fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`).then((r) =>
+            r.json()
+          ),
+        ]);
+
+        document.querySelector("#container img").src =
+          poke.sprites.front_default;
+        document.querySelector("#poke-koname").textContent =
+          species.names.find((n) => n.language.name === "ko")?.name || "";
+        document.querySelector("#poke-enname").textContent = poke.name;
+
+        document.querySelector("#poke-info").classList.remove("hide");
+        document.querySelector("#message").classList.add("hide");
+        localStorage.setItem("memory", nameOrId);
+      }
+
+      document.querySelector("#search-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = document.querySelector("#poke-name").value.trim();
+        if (input) searchName(input);
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const memory = localStorage.getItem("memory");
+        if (memory) {
+          document.querySelector("#poke-name").value = memory;
+          searchName(memory);
+        }
+      });
+    </script>
+    <footer style="font-size: 0.8rem; text-align: center; margin-top: 1rem">
+      <a href="https://www.flaticon.com/kr/free-icons/" title="포켓몬 아이콘">
+        Favicon 제작자: Those Icons - Flaticon
+      </a>
+    </footer>
+  </body>
+</html>
